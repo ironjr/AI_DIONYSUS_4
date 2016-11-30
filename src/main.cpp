@@ -378,19 +378,53 @@ int main(int argc, char** argv) {
 }
 
 void set_waypoints() {
-    point waypoint_candid[4];
-    waypoint_candid[0].x = 5.0;
-    waypoint_candid[0].y = -8.0;
-    waypoint_candid[1].x = -6.0;
-    waypoint_candid[1].y = -7.0;
-    waypoint_candid[2].x = -8.0;
-    waypoint_candid[2].y = 8.0;
-    waypoint_candid[3].x = 3.0;
-    waypoint_candid[3].y = 7.0;
+    int order_size;
+    switch (SCENARIO) {
+    case 1: {
 
-    int order[] = {3,1,2,3};
-    int order_size = 4;
+    } break;
+    case 2: {
 
+    } break;
+    case 3: {
+        point waypoint_candid[4];
+        waypoint_candid[0].x = 5.0;
+        waypoint_candid[0].y = -7.0;
+        waypoint_candid[1].x = -3.0;
+        waypoint_candid[1].y = -6.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 8.0;
+        waypoint_candid[3].x = 8.0;
+        waypoint_candid[3].y = 8.0;
+        int order[] = {0,1,2,3};
+        order_size = 4;
+    } break;
+    case 4: {
+        point waypoint_candid[3];
+        waypoint_candid[0].x = -6.0;
+        waypoint_candid[0].y = 0.0;
+        waypoint_candid[1].x = 3.0;
+        waypoint_candid[1].y = -8.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 7.0;
+        int order[] = {0,1,2};
+        order_size = 3;
+    } break;
+    default: {
+        point waypoint_candid[4];
+        waypoint_candid[0].x = 5.0;
+        waypoint_candid[0].y = -8.0;
+        waypoint_candid[1].x = -6.0;
+        waypoint_candid[1].y = -7.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 8.0;
+        waypoint_candid[3].x = 3.0;
+        waypoint_candid[3].y = 7.0;
+        int order[] = {3,1,2,3};
+        order_size = 4;
+    } break;
+    }
+    
     for(int i = 0; i < order_size; i++){
         waypoints.push_back(waypoint_candid[order[i]]);
     }
@@ -441,6 +475,7 @@ void callback_points(sensor_msgs::PointCloud2ConstPtr msgs) {
     pcl::fromROSMsg(*msgs,point_cloud);
 }
 
+/*
 bool isObstacle() {
     pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
     point robot_pose_cpy = robot_pose;
@@ -523,7 +558,8 @@ std::list<point>* getObstacleList() {
     }
     return obstacleList;
 }
-
+*/
+ /*
 bool isCleared() {
     pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
     point robot_pose_cpy = robot_pose;
@@ -606,6 +642,78 @@ std::list<point>* getClearedList() {
     }
     return clearedList;
 }
+*/
+
+std::list<point>* getClosestObstacleList() {
+    std::list<point> *closestObstacleList = new std::list<point>();
+
+    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
+    point robot_pose_cpy = robot_pose;
+
+    // Return if robot is on the margin
+    point samplePoint;
+    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
+    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
+        return closestObstacleList;
+    }
+
+    // Get all obstacle points
+    for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
+        point farthestPoint;
+        farthestPoint.th = -1;
+        pcl::PointXYZ checkpoint;
+        for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
+            checkpoint = point_cloud_cpy.at(w, h);
+            if (isObstaclePoint(checkpoint)) {
+                int obstaclePoints = 0;
+                pcl::PointXYZ tempPoint;
+                for (int delta_h = -OBSTACLE_CONFIRM_H; delta_h <= OBSTACLE_CONFIRM_H; ++delta_h) {
+                    for (int delta_w = -OBSTACLE_CONFIRM_W; delta_w <= OBSTACLE_CONFIRM_W; ++delta_w) {
+                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
+                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
+                            continue;
+                        }
+                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
+                        if (isObstaclePoint(tempPoint))
+                            ++obstaclePoints;
+                    }
+                }
+                if (obstaclePoints >= OBSTACLE_CONFIRM_THRESHOLD) {
+                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
+                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
+                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
+                        continue;
+                    if (samplePoint.distanceWith(robot_pose_cpy) < farthestPoint.distanceWith(robot_pose_cpy))
+                        farthestPoint = samplePoint;
+                }
+            }
+        }
+        if (farthestPoint.th = -1)
+            farthestPoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
+        closestObstacleList.push_back(farthestPoint);
+    }
+
+    return closestObstacleList;
+}
+
+bool updateMap() {
+    bool result;
+    std::list<point> *obstacleList = getObstacleList();
+
+    if (result = !obstacleList->empty()) {
+        std::list<point>::iterator it;
+        GridMapPoint gp;
+        for (it = obstacleList->begin(); it != obstacleList->end(); ++it) {
+            gp = GridMapPoint(*it, res, map_origin_x, map_origin_y);
+            if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
+                continue;
+            addNewMargin(dynamic_map, NEW_OBSTACLE_MARGIN, gp);
+        }
+    }
+
+    delete obstacleList;
+    return result;
+}
 
 inline bool isObstaclePoint(pcl::PointXYZ p) {
     return !(p.z != p.z)
@@ -623,6 +731,7 @@ inline bool isAvailablePoint(pcl::PointXYZ p) {
         && std::abs(p.x) < KINECT_VIEWAREA_X;
 }
 
+ /*
 bool isCollisionAndAddMargin() {
     bool result;
     std::list<point> *obstacleList = getObstacleList();
@@ -660,6 +769,7 @@ bool isClearanceAndDeleteMargin() {
     delete clearedList;
     return result;
 }
+*/
 
 void dynamic_mapping() {
     generate_path_RRT(robot_pose);
