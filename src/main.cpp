@@ -44,6 +44,7 @@
 
 #define NEW_OBSTACLE_MARGIN 10
 #define NEW_CLEARANCE_MARGIN 10
+#define NEW_MARGIN_TOLERANCE 13
 
 // State definition
 #define INIT 0
@@ -378,19 +379,53 @@ int main(int argc, char** argv) {
 }
 
 void set_waypoints() {
-    point waypoint_candid[4];
-    waypoint_candid[0].x = 5.0;
-    waypoint_candid[0].y = -8.0;
-    waypoint_candid[1].x = -6.0;
-    waypoint_candid[1].y = -7.0;
-    waypoint_candid[2].x = -8.0;
-    waypoint_candid[2].y = 8.0;
-    waypoint_candid[3].x = 3.0;
-    waypoint_candid[3].y = 7.0;
+    int order_size;
+    switch (SCENARIO) {
+    case 1: {
 
-    int order[] = {3,1,2,3};
-    int order_size = 4;
+    } break;
+    case 2: {
 
+    } break;
+    case 3: {
+        point waypoint_candid[4];
+        waypoint_candid[0].x = 5.0;
+        waypoint_candid[0].y = -7.0;
+        waypoint_candid[1].x = -3.0;
+        waypoint_candid[1].y = -6.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 8.0;
+        waypoint_candid[3].x = 8.0;
+        waypoint_candid[3].y = 8.0;
+        int order[] = {0,1,2,3};
+        order_size = 4;
+    } break;
+    case 4: {
+        point waypoint_candid[3];
+        waypoint_candid[0].x = -6.0;
+        waypoint_candid[0].y = 0.0;
+        waypoint_candid[1].x = 3.0;
+        waypoint_candid[1].y = -8.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 7.0;
+        int order[] = {0,1,2};
+        order_size = 3;
+    } break;
+    default: {
+        point waypoint_candid[4];
+        waypoint_candid[0].x = 5.0;
+        waypoint_candid[0].y = -8.0;
+        waypoint_candid[1].x = -6.0;
+        waypoint_candid[1].y = -7.0;
+        waypoint_candid[2].x = -8.0;
+        waypoint_candid[2].y = 8.0;
+        waypoint_candid[3].x = 3.0;
+        waypoint_candid[3].y = 7.0;
+        int order[] = {3,1,2,3};
+        order_size = 4;
+    } break;
+    }
+    
     for(int i = 0; i < order_size; i++){
         waypoints.push_back(waypoint_candid[order[i]]);
     }
@@ -441,172 +476,6 @@ void callback_points(sensor_msgs::PointCloud2ConstPtr msgs) {
     pcl::fromROSMsg(*msgs,point_cloud);
 }
 
-bool isObstacle() {
-    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
-    point robot_pose_cpy = robot_pose;
-    point samplePoint;
-    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
-    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
-        return false;
-    }
-
-    for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
-        for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
-            pcl::PointXYZ checkpoint = point_cloud_cpy.at(w, h);
-            if (isObstaclePoint(checkpoint)) {
-                int obstaclePoints = 0;
-                pcl::PointXYZ tempPoint;
-                for (int delta_h = -OBSTACLE_CONFIRM_H; delta_h <= OBSTACLE_CONFIRM_H; ++delta_h) {
-                    for (int delta_w = -OBSTACLE_CONFIRM_W; delta_w <= OBSTACLE_CONFIRM_W; ++delta_w) {
-                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
-                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
-                            continue;
-                        }
-                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
-                        if (isObstaclePoint(tempPoint))
-                            ++obstaclePoints;
-                    }
-                }
-                if (obstaclePoints >= OBSTACLE_CONFIRM_THRESHOLD) {
-                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
-                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
-                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
-                        continue;
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) > 0)
-                        return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-std::list<point>* getObstacleList() {
-    std::list<point> *obstacleList = new std::list<point>();
-    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
-    point robot_pose_cpy = robot_pose;
-
-    point samplePoint;
-    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
-    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
-        return obstacleList;
-    }
-
-    for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
-        for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
-            pcl::PointXYZ checkpoint = point_cloud_cpy.at(w, h);
-            if (isObstaclePoint(checkpoint)) {
-                int obstaclePoints = 0;
-                pcl::PointXYZ tempPoint;
-                for (int delta_h = -OBSTACLE_CONFIRM_H; delta_h <= OBSTACLE_CONFIRM_H; ++delta_h) {
-                    for (int delta_w = -OBSTACLE_CONFIRM_W; delta_w <= OBSTACLE_CONFIRM_W; ++delta_w) {
-                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
-                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
-                            continue;
-                        }
-                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
-                        if (isObstaclePoint(tempPoint))
-                            ++obstaclePoints;
-                    }
-                }
-                if (obstaclePoints >= OBSTACLE_CONFIRM_THRESHOLD) {
-                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
-                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
-                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
-                        continue;
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) > 0) {
-                        obstacleList->push_back(samplePoint);
-                    }
-                }
-            }
-        }
-    }
-    return obstacleList;
-}
-
-bool isCleared() {
-    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
-    point robot_pose_cpy = robot_pose;
-    point samplePoint;
-    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
-    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
-        return false;
-    }
-
-    for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
-        for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
-            pcl::PointXYZ checkpoint = point_cloud_cpy.at(w, h);
-            if (isAvailablePoint(checkpoint)) {
-                int clearedPoints = 0;
-                pcl::PointXYZ tempPoint;
-                for (int delta_h = -OBSTACLE_CONFIRM_H; delta_h <= OBSTACLE_CONFIRM_H; ++delta_h) {
-                    for (int delta_w = -OBSTACLE_CONFIRM_W; delta_w <= OBSTACLE_CONFIRM_W; ++delta_w) {
-                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
-                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
-                            continue;
-                        }
-                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
-                        if (isAvailablePoint(tempPoint))
-                            ++clearedPoints;
-                    }
-                }
-                if (clearedPoints >= CLEARANCE_CONFIRM_THRESHOLD) {
-                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
-                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
-                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
-                        continue;
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) == 0)
-                        return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-std::list<point>* getClearedList() {
-    std::list<point> *clearedList = new std::list<point>();
-    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
-    point robot_pose_cpy = robot_pose;
-
-    point samplePoint;
-    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
-    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
-        return clearedList;
-    }
-
-    for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
-        for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
-            pcl::PointXYZ checkpoint = point_cloud_cpy.at(w, h);
-            if (isAvailablePoint(checkpoint)) {
-                int clearedPoints = 0;
-                pcl::PointXYZ tempPoint;
-                for (int delta_h = -CLEARANCE_CONFIRM_H; delta_h <= CLEARANCE_CONFIRM_H; ++delta_h) {
-                    for (int delta_w = -CLEARANCE_CONFIRM_W; delta_w <= CLEARANCE_CONFIRM_W; ++delta_w) {
-                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
-                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
-                            continue;
-                        }
-                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
-                        if (isAvailablePoint(tempPoint))
-                            ++clearedPoints;
-                    }
-                }
-                if (clearedPoints >= CLEARANCE_CONFIRM_THRESHOLD) {
-                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
-                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
-                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
-                        continue;
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) == 0) {
-                        clearedList->push_back(samplePoint);
-                    }
-                }
-            }
-        }
-    }
-    return clearedList;
-}
-
 inline bool isObstaclePoint(pcl::PointXYZ p) {
     return !(p.z != p.z)
         && getActualZ(p) > OBSTACLE_HEIGHT_MIN
@@ -623,10 +492,63 @@ inline bool isAvailablePoint(pcl::PointXYZ p) {
         && std::abs(p.x) < KINECT_VIEWAREA_X;
 }
 
-bool isCollisionAndAddMargin() {
-    bool result;
-    std::list<point> *obstacleList = getObstacleList();
+std::list<point>* getClosestObstacleList() {
+    std::list<point> *closestObstacleList = new std::list<point>();
 
+    pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
+    point robot_pose_cpy = robot_pose;
+
+    // Return if robot is on the margin
+    point samplePoint;
+    GridMapPoint gp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
+    if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
+        return closestObstacleList;
+    }
+
+    // Get all obstacle points
+    for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
+        point farthestPoint;
+        farthestPoint.th = -1;
+        pcl::PointXYZ checkpoint;
+        for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
+            checkpoint = point_cloud_cpy.at(w, h);
+            if (isObstaclePoint(checkpoint)) {
+                int obstaclePoints = 0;
+                pcl::PointXYZ tempPoint;
+                for (int delta_h = -OBSTACLE_CONFIRM_H; delta_h <= OBSTACLE_CONFIRM_H; ++delta_h) {
+                    for (int delta_w = -OBSTACLE_CONFIRM_W; delta_w <= OBSTACLE_CONFIRM_W; ++delta_w) {
+                        if (w + delta_w < 0 || w + delta_w >= point_cloud_cpy.width
+                            || h + delta_h < 0 || h + delta_h >= point_cloud_cpy.height) {
+                            continue;
+                        }
+                        tempPoint = point_cloud_cpy.at(w + delta_w, h + delta_h);
+                        if (isObstaclePoint(tempPoint))
+                            ++obstaclePoints;
+                    }
+                }
+                if (obstaclePoints >= OBSTACLE_CONFIRM_THRESHOLD) {
+                    samplePoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
+                    gp = GridMapPoint(samplePoint, res, map_origin_x, map_origin_y);
+                    if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
+                        continue;
+                    if (samplePoint.distanceWith(robot_pose_cpy) < farthestPoint.distanceWith(robot_pose_cpy))
+                        farthestPoint = samplePoint;
+                }
+            }
+        }
+        if (farthestPoint.th = -1)
+            farthestPoint = transformFrameKinect2World(checkpoint, robot_pose_cpy);
+        closestObstacleList.push_back(farthestPoint);
+    }
+
+    return closestObstacleList;
+}
+
+bool isCollision() {
+    bool result;
+    std::list<point> *closestObstacleList = getClosestObstacleList();
+
+    processMap(closestObstacleList, int tolerance, point robotPose, pcl::map map);
     if (result = !obstacleList->empty()) {
         std::list<point>::iterator it;
         GridMapPoint gp;
@@ -639,25 +561,6 @@ bool isCollisionAndAddMargin() {
     }
 
     delete obstacleList;
-    return result;
-}
-
-bool isClearanceAndDeleteMargin() {
-    bool result;
-    std::list<point> *clearedList = getClearedList();
-
-    if (result = !clearedList->empty()) {
-        std::list<point>::iterator it;
-        GridMapPoint gp;
-        for (it = clearedList->begin(); it != clearedList->end(); ++it) {
-            gp = GridMapPoint(*it, res, map_origin_x, map_origin_y);
-            if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
-                continue;
-            deleteNewMargin(dynamic_map, NEW_CLEARANCE_MARGIN, gp);
-        }
-    }
-
-    delete clearedList;
     return result;
 }
 
@@ -682,23 +585,6 @@ point transformFrameKinect2World(pcl::PointXYZ kinectPoint, point poseOfRobot) {
 
 inline double getActualZ(pcl::PointXYZ kinectPoint) {
     return -kinectPoint.y + GROUND_HEIGHT;
-}
-
-// TODO: Optimize adding margins
-void addNewMargin(cv::Mat& map, int margin, GridMapPoint& gp) {
-    for (int j = gp.i - margin; j < gp.i + margin; j++) {
-        for (int k = gp.j - margin; k < gp.j + margin; k++) {
-            map.at<uchar>(j, k) = 0;
-        }
-    }
-}
-
-void deleteNewMargin(cv::Mat& map, int margin, GridMapPoint& gp) {
-    for (int j = gp.i - margin; j < gp.i + margin; j++) {
-        for (int k = gp.j - margin; k < gp.j + margin; k++) {
-            map.at<uchar>(j, k) = 255;
-        }
-    }
 }
 
 cv::Mat addMargin(cv::Mat map, int margin) {
@@ -755,3 +641,78 @@ void setcmdvel(double v, double w) {
         ros::spinOnce();
     }
 #endif
+
+inline bool comparePoints(point& p1, point& p2) {
+    return p1.x > p1.x;
+}
+
+point rotate(int x, int y, double theta) {
+    double x_new = x*cos(theta) - y*sin(theta);
+    double y_new = x*sin(theta) + y*cos(theta);
+    point newPoint;
+    newPoint.x = x_new;
+    newPoint.y = y_new;
+    return newPoint;
+}
+
+std::list<GridMapPoint>* getMargins(point point1, point point2, int marginX, int marignY) { // pointx < point2.y 라는 가정
+    std::list<GridMapPoint>* newList = new std::list<GridMapPoint>();
+    GridMapPoint gp1 = GridMapPoint(point1, res, map_origin_x, map_origin_y);
+    GridMapPoint gp2 = GridMapPoint(point2, res, map_origin_x, map_origin_y);
+    double grad = (gp2.j - gp1.j) / (gp2.i - gp1.i);
+    double distance = sqrt(pow((gp2.i - gp1.i),2) + pow((gp2.j - gp1.j),2));
+    double theta = atan(grad);
+    for (int i = -marginX; i < distance + marginX ; i++) {
+        for (int j = -marginY; j < marginY; j++) {
+            newList->push_back(rotate(i, j, theta));
+        }
+    }
+    return newList;
+}
+
+void processMap(std::list<point> points, int tolerance, point robotPose, pcl::map map) {
+    std::list<point>::iterator it = points.begin();
+    std::list<point>::iterator it2 = next(points,1);
+    while (it2 != points.end()) {
+        point point1 = *it;
+        point point2 = *it2;
+        GridMapPoint pairOfRobot = GridMapPoint(robotPose);
+        GridMapPoint pairs1 = GridMapPoint(point1);
+        GridMapPoint pairs2 = GridMapPoint(point2);
+        bool isObstacleInReal1 = points1.z != 100;
+        bool isObstacleInReal2 = points2.z != 100;
+        double gradInMap1 = (pairs1.i - pairOfRobot.i)/ (pairs1.j - pairOfRobot.j);
+        double gradInMap2 = (pairs2.i - pairOfRobot.i)/ (pairs2.j - pairOfRobot.j);
+        if (!isObstacleInReal && !isObstacleInReal1) { // 두 점 모두 clear 일경우 
+            for (int y = pairOfRobot.j; y < pairs1.j; y++) {
+                for (int x = gradInMap1 * (y - pairOfRobot.j) + pairOfRobot.i; x < gradInMap2 * (y - pairOfRobot.j) + pairOfRobot.i; x++) {
+                    map.at(x, y) = 0;
+                }
+            }
+        } else if (isObstacleInReal1 && isObstacleInReal2) { // 두 점 모두 obstacle
+            for (int y = pairOfRobot.j; y < (pairs1.j - tolerance); y++) {
+                for (int x = gradInMap1 * (y - pairOfRobot.j) + pairOfRobot.i; x < gradInMap2 * (y - pairOfRobot.j) + pairOfRobot.i; x++) {
+                    map.at(x, y) = 0;
+                }
+            }
+            bool isObstacleInMap = map.at(pairs.i, pairs.j);
+            if (!isObstacleInMap) { // map상의 obstacle 이 있는지 확인
+                std::list<GridMapPoint>* marginsList = getMargins(point1, point2 marginX, marignY); //point 1,2 사이의 buffer margin을 모두 가져온다 
+                for(std::list<GridMapPoint>::iterator it = marginsList->begin(); it != marginsList->end(); it++) {
+                    map.at(it->i, it->j) = 255;
+                }
+                delete marginsList;
+            }
+        } else { // 한점은 clear 한점은 obstacle
+            point pointOfObstacle = isObstacleInReal1 ? points1 : points2;
+            int yOfObastacle = getPoseOfMap(pointOfObstacle).j;
+            for (int y = pairOfRobot.j; y < (yOfObastacle - tolerance); y++) {
+                for (int x = gradInMap1 * (y - pairOfRobot.j) + pairOfRobot.i; x < gradInMap2 * (y - pairOfRobot.j) + pairOfRobot.i; x++) {
+                    map.at(x, y) = 0;
+                }
+            }
+        }
+        it++;
+        it2++;
+    }
+}
