@@ -65,6 +65,7 @@ struct GridMapPoint {
 	GridMapPoint operator+(const GridMapPoint &gp) const { 
 		return GridMapPoint(gp.i + i, gp.j + j);
 	}
+	
 	GridMapPoint operator-(const GridMapPoint &gp) const { 
 		return GridMapPoint(i - gp.i , j - gp.j);
 	}
