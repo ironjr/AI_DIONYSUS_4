@@ -62,6 +62,12 @@ struct GridMapPoint {
 		j = (int)(_i*sin(theta) + _j*cos(theta));	
 	}
 
+	GridMapPoint(int _i, int _j, double theta, bool isCeil) {
+		i = isCeil ? ceil(_i*cos(theta) - _j*sin(theta)) : (int)(_i*cos(theta) - _j*sin(theta));
+		j = isCeil ? ceil(_i*sin(theta) + _j*cos(theta)) : (int)(_i*sin(theta) + _j*cos(theta));		
+	}
+
+
 	GridMapPoint operator+(const GridMapPoint &gp) const { 
 		return GridMapPoint(gp.i + i, gp.j + j);
 	}

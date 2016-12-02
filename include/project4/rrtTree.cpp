@@ -1,7 +1,7 @@
 // #define DEBUG_VISUALIZE_TREE
-#define DEBUG_IMAGE_FILE
+// #define DEBUG_IMAGE_FILE
 
-#define ETA 2.0
+#define ETA 1.0
 #define GAMMA_MULTIPLIER 1
 #define GAMMA 14        
 #define SAMPLE_RATE 1
@@ -10,10 +10,9 @@
 using namespace std;
 
 #ifdef DEBUG_IMAGE_FILE
-    static int numberOfDeaths = 0;
-    static int imageNumber = 1;
+static int numberOfDeaths = 0;
+static int imageNumber = 1;
 #endif
-
 
 double fRand(double fMin, double fMax) {
     double f = (double)rand() / RAND_MAX;
@@ -49,72 +48,75 @@ rrtTree::~rrtTree(){
 }
 
 
-    void rrtTree::visualizeTree(){
-        int thickness = 1;
-        int lineType = 8;
-        int idx_parent;
-        double Res = 2;
-        double radius = 6;
-        cv::Point x1, x2;
+void rrtTree::visualizeTree(){
+    int thickness = 1;
+    int lineType = 8;
+    int idx_parent;
+    double Res = 2;
+    double radius = 6;
+    cv::Point x1, x2;
 
-        cv::Mat map_c;
-        cv::Mat imgResult;
-        cv::cvtColor(this->map_original, map_c, CV_GRAY2BGR);
-        cv::resize(map_c, imgResult, cv::Size(), Res, Res);
+    cv::Mat map_c;
+    cv::Mat imgResult;
+    cv::cvtColor(this->map, map_c, CV_GRAY2BGR);
+    cv::resize(map_c, imgResult, cv::Size(), Res, Res);
 
-        cv::circle(imgResult, cv::Point((int)(Res*(x_init.y/res + map_origin_y)), (int)(Res*(x_init.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
-        cv::circle(imgResult, cv::Point((int)(Res*(x_goal.y/res + map_origin_y)), (int)(Res*(x_goal.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
+    cv::circle(imgResult, cv::Point((int)(Res*(x_init.y/res + map_origin_y)), (int)(Res*(x_init.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
+    cv::circle(imgResult, cv::Point((int)(Res*(x_goal.y/res + map_origin_y)), (int)(Res*(x_goal.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
 
-        for(int i = 1; i < this->count; i++) {
-            idx_parent = this->ptrTable[i]->idx_parent;
-            x1 = cv::Point((int)(Res*(ptrTable[i]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[i]->location.x/res + map_origin_x)));
-            x2 = cv::Point((int)(Res*(ptrTable[idx_parent]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[idx_parent]->location.x/res + map_origin_x)));
-            cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
-        }
-
-        cv::namedWindow("Mapping");
-        cv::Rect imgROI((int)Res*200,(int)Res*200,(int)Res*400,(int)Res*400);
-        cv::imshow("Mapping", imgResult(imgROI));
-        cv::waitKey(0);
-
+    for(int i = 1; i < this->count; i++) {
+        idx_parent = this->ptrTable[i]->idx_parent;
+        x1 = cv::Point((int)(Res*(ptrTable[i]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[i]->location.x/res + map_origin_x)));
+        x2 = cv::Point((int)(Res*(ptrTable[idx_parent]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[idx_parent]->location.x/res + map_origin_x)));
+        cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
     }
 
-    void rrtTree::visualizeTree(std::vector<point> path){
-        int thickness = 1;
-        int lineType = 8;
-        int idx_parent;
-        double Res = 2;
-        double radius = 6;
-        cv::Point x1, x2;
+#ifdef DEBUG_IMAGE_FILE
+    cv::Rect imgROI((int)Res*200,(int)Res*200,(int)Res*400,(int)Res*400);
+    std::stringstream ss;
+    ss << "vTree" << imageNumber << ".jpg";
+    ++imageNumber;
+    cv::imwrite(ss.str().c_str(), imgResult(imgROI));
+#endif
 
-        cv::Mat map_c;
-        cv::Mat imgResult;
-        cv::cvtColor(this->map_original, map_c, CV_GRAY2BGR);
-        cv::resize(map_c, imgResult, cv::Size(), Res, Res);
+}
 
-        cv::circle(imgResult, cv::Point((int)(Res*(x_init.y/res + map_origin_y)), (int)(Res*(x_init.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
-        cv::circle(imgResult, cv::Point((int)(Res*(x_goal.y/res + map_origin_y)), (int)(Res*(x_goal.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
+void rrtTree::visualizeTree(std::vector<point> path){
+    int thickness = 1;
+    int lineType = 8;
+    int idx_parent;
+    double Res = 2;
+    double radius = 6;
+    cv::Point x1, x2;
 
-        for(int i = 1; i < this->count; i++) {
-            idx_parent = this->ptrTable[i]->idx_parent;
-            x1 = cv::Point((int)(Res*(ptrTable[i]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[i]->location.x/res + map_origin_x)));
-            x2 = cv::Point((int)(Res*(ptrTable[idx_parent]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[idx_parent]->location.x/res + map_origin_x)));
-            cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
-        }
+    cv::Mat map_c;
+    cv::Mat imgResult;
+    cv::cvtColor(this->map_original, map_c, CV_GRAY2BGR);
+    cv::resize(map_c, imgResult, cv::Size(), Res, Res);
 
-        thickness = 3;
-        for(int i = 1; i < path.size(); i++) {
-            x1 = cv::Point((int)(Res*(path[i-1].y/res + map_origin_y)), (int)(Res*(path[i-1].x/res + map_origin_x)));
-            x2 = cv::Point((int)(Res*(path[i].y/res + map_origin_y)), (int)(Res*(path[i].x/res + map_origin_x)));
-            cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
-        }
+    cv::circle(imgResult, cv::Point((int)(Res*(x_init.y/res + map_origin_y)), (int)(Res*(x_init.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
+    cv::circle(imgResult, cv::Point((int)(Res*(x_goal.y/res + map_origin_y)), (int)(Res*(x_goal.x/res + map_origin_x))), radius, cv::Scalar(0, 0, 255), CV_FILLED);
 
-        cv::namedWindow("Mapping");
-        cv::Rect imgROI((int)Res*200,(int)Res*200,(int)Res*400,(int)Res*400);
-        cv::imshow("Mapping", imgResult(imgROI));
-        cv::waitKey(0);
-
+    for(int i = 1; i < this->count; i++) {
+        idx_parent = this->ptrTable[i]->idx_parent;
+        x1 = cv::Point((int)(Res*(ptrTable[i]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[i]->location.x/res + map_origin_x)));
+        x2 = cv::Point((int)(Res*(ptrTable[idx_parent]->location.y/res + map_origin_y)), (int)(Res*(ptrTable[idx_parent]->location.x/res + map_origin_x)));
+        cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
     }
+
+    thickness = 3;
+    for(int i = 1; i < path.size(); i++) {
+        x1 = cv::Point((int)(Res*(path[i-1].y/res + map_origin_y)), (int)(Res*(path[i-1].x/res + map_origin_x)));
+        x2 = cv::Point((int)(Res*(path[i].y/res + map_origin_y)), (int)(Res*(path[i].x/res + map_origin_x)));
+        cv::line(imgResult, x1, x2, cv::Scalar(255, 0, 0), thickness, lineType);
+    }
+
+    cv::namedWindow("Mapping");
+    cv::Rect imgROI((int)Res*200,(int)Res*200,(int)Res*400,(int)Res*400);
+    cv::imshow("Mapping", imgResult(imgROI));
+    cv::waitKey(0);
+
+}
 
 
 void rrtTree::addVertex(point x_new, point x_rand, int idx_near) {
@@ -310,28 +312,28 @@ void rrtTree::adjustPoint(std::map<int, node*>& near_map) {
                 std::map<int, node*>::iterator it2 = ancesotors.find(value->idx_parent); 
                 if (it2 != ancesotors.end()) { // if node's parent is in the circle but not in near_map 
                     existList.push_back(value); 
-                    std::map<int, node*>::iterator it3 = ancesotors.find(it2->second->idx_parent);
-                    if (it3 == ancesotors.end()) {
-                        idx_outParent = it2->second->idx;
-                    } else {
-                        idx_outParent = it2->second->idx_parent;
-                    }
-                    break;
-                } else { // if node's parent is not in the circle
-                    idx_outParent = value->idx;
-                    break;
+                std::map<int, node*>::iterator it3 = ancesotors.find(it2->second->idx_parent);
+                if (it3 == ancesotors.end()) {
+                    idx_outParent = it2->second->idx;
+                } else {
+                    idx_outParent = it2->second->idx_parent;
                 }
+                break;
+                } else { // if node's parent is not in the circle
+                idx_outParent = value->idx;
+                break;
+            }
             } else { // if node's parent is in the near_map
-                existList.push_back(value); 
-            }
-        } while (true);
-        for (int i = 0; i < existList.size(); i++) {
-            if(!isCollision(existList[i]->location, ptrTable[idx_outParent]->location)) {
-                existList[i]->idx_parent = idx_outParent;    
-            }
+            existList.push_back(value); 
         }
-        existList.clear();
+    } while (true);
+    for (int i = 0; i < existList.size(); i++) {
+        if(!isCollision(existList[i]->location, ptrTable[idx_outParent]->location)) {
+            existList[i]->idx_parent = idx_outParent;    
+        }
     }
+    existList.clear();
+}
 }
 
 int rrtTree::generateRRTst(double x_max, double x_min, double y_max, double y_min, int K, double MaxStep) {

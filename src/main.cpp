@@ -1,19 +1,17 @@
 // Debug Option
 // #define DEBUG_TEXT
 // #define DEBUG_POINT_CLOUD
-#define DEBUG_BALL
-#define DEBUG_IMAGE
+// #define DEBUG_BALL
+// #define DEBUG_IMAGE
 #define VISUALIZE_PATH false
 
-#define SCENARIO 0
-
 #define CONST_K 50000
-#define MAX_STEP 0.25
+#define MAX_STEP 0.2
 
 #define LOOK_AHEAD_DISTANCE 0.5
 #define GOAL_CONFIRM_DISTANCE 0.2
 
-#define MARGIN 10
+#define MARGIN 12
 
 // Dynamic mapping
 #define HORIZON 274 // HORIZON <= "Ground" <= 480
@@ -22,7 +20,7 @@
 
 #define COLLISION_CHECK_RATE 10 // # of iterations passed before next collision check
 // #define KINECT_MARGIN_W 10
-#define KINECT_VIEWAREA_X 1.1
+#define KINECT_VIEWAREA_X 1.2
 #define CAMERA_SAMPLING_RATE_H 3
 #define CAMERA_SAMPLING_RATE_W 3
 
@@ -41,15 +39,15 @@
 #define CLEARANCE_HEIGHT_HIGH 0.45
 
 #define STEP_OF_OBSTACLE_CHECK -3.0 // GridMapPoint unit
-#define STEP_OF_CLEARANCE_CHECK 15
+#define STEP_OF_CLEARANCE_CHECK -24
 #define SLEEP_SETTLING_TIME 3
 
 #define NEW_CLEARANCE_MARGIN 10
 #define NEW_MARGIN_TOLERANCE 15
 
 #define DISTANCE_DISTINGISH_OBSTACLE 0.3
-#define TOLERANCE_OF_CLEARANCE 15
-#define MARGIN_OF_NEWOBSTACLE 7
+#define TOLERANCE_OF_CLEARANCE 18
+#define MARGIN_OF_NEWOBSTACLE 10
 
 // State definition
 #define INIT 0
@@ -74,7 +72,6 @@
 #include <algorithm>
 
 
-
 // Debug image
 #ifdef DEBUG_IMAGE
 static int imageNumberMain = 1;
@@ -93,6 +90,7 @@ double world_x_max;
 double world_y_min;
 double world_y_max;
 
+int SCENARIO = 1;
 // Waypoints
 std::vector<point> waypoints;
 
@@ -193,9 +191,11 @@ int main(int argc, char** argv) {
 
     // Load Map
     char* user = getlogin();
+    std::stringstream address;
+    address << "/catkin_ws/src/project4/src/ground_truth_map_sin" << SCENARIO << ".pgm";
     map = cv::imread((std::string("/home/")+
       std::string(user)+
-      std::string("/catkin_ws/src/project3/src/ground_truth_map.pgm")).c_str(), CV_LOAD_IMAGE_GRAYSCALE);
+      address.str()).c_str(), CV_LOAD_IMAGE_GRAYSCALE);
     map_y_range = map.cols;
     map_x_range = map.rows;
     map_origin_x = map_x_range/2.0 - 0.5;
@@ -247,10 +247,10 @@ int main(int argc, char** argv) {
                 model_pose.position.x = waypoints[0].x;
                 model_pose.position.y = waypoints[0].y;
                 model_pose.position.z = 0.3;
-                model_pose.orientation.x = 0.0;
-                model_pose.orientation.y = 0.0;
-                model_pose.orientation.z = 0.0;
-                model_pose.orientation.w = 0.0;
+                model_pose.orientation.x = 0;
+                model_pose.orientation.y = 0;
+                model_pose.orientation.z = 0;
+                model_pose.orientation.w = 0;
 
                 geometry_msgs::Twist model_twist;
                 model_twist.linear.x = 0.0;
@@ -283,6 +283,8 @@ int main(int argc, char** argv) {
             int iteration = 0; // # of while loop iteration
             purePursuit controller;
             std::vector<point>::iterator it = path_RRT.begin();
+            std::vector<point>::iterator endIt = path_RRT.end();
+            endIt--;
             int cc = 0;
             bool shouldPathPlanning = false;
             while(ros::ok()) {
@@ -301,10 +303,9 @@ int main(int argc, char** argv) {
                 if (iteration % COLLISION_CHECK_RATE == 0) {
                     // Scan quickly whether obstacle presents or not
                     bool obs = isObstacle();
-                    bool clr = !obs ? isCleared() : false;
+                    bool clr = !obs && (iteration % 2*COLLISION_CHECK_RATE == 0)  ? isCleared() : false;
                     if (obs || clr) {
                         // Stop and check carefully
-                        cout<<"detect Obstacle"<<endl;
                         setcmdvel(0, 0);
                         cmd_vel_pub.publish(cmd_vel);
                         ros::spinOnce();
@@ -317,7 +318,7 @@ int main(int argc, char** argv) {
                 }
 
                 // End check
-                if (robot_pose.distanceWith(nextPoint) < LOOK_AHEAD_DISTANCE) {
+                if (robot_pose.distanceWith(nextPoint) < ((it != endIt) ? LOOK_AHEAD_DISTANCE : GOAL_CONFIRM_DISTANCE)) {
                     ++it;
                     if (it == path_RRT.end()) {
                         printf("Visited goal # %d\n", goal_visited);
@@ -387,16 +388,29 @@ return 0;
 
 void set_waypoints() {
     int order_size;
-    point waypoint_candid[4];
+
     switch (SCENARIO) {
         case 1: {
-
+            point waypoint_candid[4];
+            waypoint_candid[0].x = 4.0;
+            waypoint_candid[0].y = 4.0;
+            waypoint_candid[1].x =  -8.0;
+            waypoint_candid[1].y = 0.0;
+            waypoint_candid[2].x = -8.0;
+            waypoint_candid[2].y = 8.0;
+            waypoint_candid[3].x = 8.0;
+            waypoint_candid[3].y = 8.0;
+            int order[] = {0,1,2,3};
+            order_size = 4;
+            for(int i = 0; i < order_size; i++){
+                waypoints.push_back(waypoint_candid[order[i]]);
+            }
         } break;
         case 2: {
 
         } break;
         case 3: {
-
+            point waypoint_candid[4];
             waypoint_candid[0].x = 5.0;
             waypoint_candid[0].y = -7.0;
             waypoint_candid[1].x = -3.0;
@@ -509,7 +523,6 @@ bool isObstacle() {
     if (dynamic_map.at<uchar>(robotGp.i,robotGp.j) == 0) {
         return false;
     }
-
     for (int h = point_cloud_cpy.height - 1; h > HORIZON - CHECK_Z_ABOVE_HORIZON; h -= CAMERA_SAMPLING_RATE_H) {
         for (int w = 0; w < point_cloud_cpy.width; w += CAMERA_SAMPLING_RATE_W) {
             pcl::PointXYZ checkpoint = point_cloud_cpy.at(w, h);
@@ -534,21 +547,17 @@ bool isObstacle() {
                     GridMapPoint tempGp = gp - robotGp;
                     double norm = sqrt((double)pow(tempGp.i, 2)+(double)pow(tempGp.j , 2));
                     gp = gp + GridMapPoint(int(tempGp.i * STEP_OF_OBSTACLE_CHECK / norm), int(tempGp.j*STEP_OF_OBSTACLE_CHECK/norm));
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) > 0) {
-                        cout<<"is ob" <<gp.i<<" "<<gp.j<<endl;
-                        cout<<"map " <<(int)dynamic_map.at<uchar>(gp.i, gp.j)<<" "<<getActualZ(checkpoint)<<endl;
-                        // std::stringstream ss;
-                        // ss << "debug" << imageNumberMain << ".jpg";
-                        // ++imageNumberMain;
-                        // int t1 = gp.i;
-                        // int t2 = gp.j;
-                        // for (int i = t1 - 2; i < t1+2; i++) {
-                        //     for (int j = t2 - 2; j < t2+2; j++) {
-                        //         dynamic_map.at<uchar>(i, j) = 130;
-                        //     }
-                        // }                        
-                        // cv::imwrite(ss.str().c_str(), dynamic_map);
-                        gp_debug = gp;
+                    int step = 2;
+                    int cnt = 0;
+                    for (int i = gp.i - step; i <= gp.i +step ; i++) {
+                        for (int j = gp.j - step; j <= gp.j + step ; j++) {
+                            if (dynamic_map.at<uchar>(i, j) > 0) {
+                                cnt++;
+                            } 
+                        }    
+                    }
+                   if (cnt > pow((2*step+1) , 2)-2) {
+                        cout<<"detect Obstacle"<<endl;
                         return true;
 
                     }
@@ -567,7 +576,7 @@ bool isCleared() {
     pcl::PointCloud<pcl::PointXYZ> point_cloud_cpy = pcl::PointCloud<pcl::PointXYZ>(point_cloud);
     point robot_pose_cpy = robot_pose;
     point samplePoint;
-        GridMapPoint robotGp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
+    GridMapPoint robotGp = GridMapPoint(robot_pose_cpy, res, map_origin_x, map_origin_y);
 
     GridMapPoint gp;
     if (dynamic_map.at<uchar>(gp.i,gp.j) == 0) {
@@ -598,8 +607,17 @@ bool isCleared() {
                     gp = gp + GridMapPoint(int(tempGp.i * STEP_OF_CLEARANCE_CHECK / norm), int(tempGp.j*STEP_OF_CLEARANCE_CHECK/norm));
                     if (gp.i >= 600 || gp.j >= 600 || gp.i < 200 || gp.j < 200)
                         continue;
-                    if (dynamic_map.at<uchar>(gp.i, gp.j) == 0) {
-                        cout<<"clearance : "<<gp.i<<" "<<gp.j<<" "<<(int)dynamic_map.at<uchar>(gp.i, gp.j) <<endl;
+                    int step = 4;
+                    int cnt = 0;
+                    for (int i = gp.i - step; i <= gp.i +step ; i++) {
+                        for (int j = gp.j - step; j <= gp.j + step ; j++) {
+                            if (dynamic_map.at<uchar>(i, j) == 0) {
+                                cnt++;
+                            } 
+                        }    
+                    }
+                    if (cnt == pow((2*step+1) , 2)) {
+                        cout<<"detect clearance"<<endl;
                         return true;
                     }
                 }
@@ -670,7 +688,6 @@ std::list<point>* getClosestObstacleList() {
 }
 
 bool isCollision() {
-    cout<<"dc"<<endl;
     std::list<point> *closestObstacleList = getClosestObstacleList();
     bool result = processMap(*closestObstacleList, TOLERANCE_OF_CLEARANCE, robot_pose, dynamic_map);
     delete closestObstacleList;
@@ -687,8 +704,7 @@ inline bool isObstaclePoint(pcl::PointXYZ p) {
 
 inline bool isAvailablePoint(pcl::PointXYZ p) {
     return !(p.z != p.z)
-    && (getActualZ(p) < CLEARANCE_HEIGHT_LOW
-        || getActualZ(p) > CLEARANCE_HEIGHT_HIGH)
+    && (getActualZ(p) < CLEARANCE_HEIGHT_LOW)
     && p.z < CLEARANCE_DETERMINENT_DISTANCE
     && std::abs(p.x) < KINECT_VIEWAREA_X;
 }
@@ -727,11 +743,13 @@ cv::Mat addMargin(cv::Mat map, int margin) {
                         }
                     }
                 }
-            }
-        }
-    }
+            } else {
+               map_margin.at<uchar>(i, j) = 255;
+           }
+       }
+   }
 
-    return map_margin;
+   return map_margin;
 }
 
 void setcmdvel(double v, double w) {
@@ -777,7 +795,9 @@ std::list<GridMapPoint*>* getMargins(point point1, point point2, int marginX, in
     double distance = sqrt(pow((gp2.i - gp1.i),2) + pow((gp2.j - gp1.j),2));
     for (int i = -marginX; i < distance + marginX ; i++) {
         for (int j = -marginY; j < marginY; j++) {
-            GridMapPoint tempGp = GridMapPoint(i, j, theta) + gp1;
+            GridMapPoint tempGp = GridMapPoint(i, j, theta, true) + gp1;
+            newList->push_back(new GridMapPoint(tempGp.i, tempGp.j));
+            tempGp = GridMapPoint(i, j, theta, false) + gp1;
             newList->push_back(new GridMapPoint(tempGp.i, tempGp.j));
         }
     }
@@ -807,57 +827,49 @@ bool processMap(std::list<point> &points, int tolerance, point robotPose, cv::Ma
                     map.at<uchar>(pairs2.i, pairs2.j) = 0;
                     result = true;
                     std::list<GridMapPoint*>* marginsList = getMargins(point1, point2, MARGIN_OF_NEWOBSTACLE, MARGIN_OF_NEWOBSTACLE); //point 1,2 사이의 buffer margin을 모두 가져온다 
-                    std::list<GridMapPoint*>::iterator it = marginsList->begin();
-                    it = marginsList->begin();
-                    cout<<"range : "<<(*it)->i <<" "<<(*it)->j<<",";
-                    it = marginsList->end();
-                    it--;
-                    cout<<(*it)->i <<" "<<(*it)->j<<endl;
-                    
                     for(std::list<GridMapPoint*>::iterator it = marginsList->begin(); it != marginsList->end(); it++) {
                         if(validMatrix(*(*it))) {
                             cnt++;
-                            if(gp_debug.i == (*it)->i && gp_debug.j == (*it)->j) {
-                                cout<<"jack pot"<<endl;
-                            }     
                             map.at<uchar>((*it)->i, (*it)->j) = 0;
                         }
                     }
                     delete marginsList;
                 }
             } else {
-               obsCnt++;
-            }
-        } 
-        GridMapPoint pairOfRobot = GridMapPoint(robotPose, res, map_origin_x, map_origin_y);
-        double theta = M_PI/2 - robotPose.th;
-        GridMapPoint diffP1 = pairs1 - pairOfRobot;
-        GridMapPoint diffP2 = pairs2 - pairOfRobot;
-        GridMapPoint p1_rotated;
-        GridMapPoint p2_rotated; 
-        p1_rotated.i = diffP1.i * std::cos(theta) - diffP1.j * std::sin(theta); 
-        p1_rotated.j = diffP1.i * std::sin(theta) + diffP1.j * std::cos(theta);
+             obsCnt++;
+         }
+     } 
+     GridMapPoint pairOfRobot = GridMapPoint(robotPose, res, map_origin_x, map_origin_y);
+     double theta = M_PI/2 - robotPose.th;
+     GridMapPoint diffP1 = pairs1 - pairOfRobot;
+     GridMapPoint diffP2 = pairs2 - pairOfRobot;
+     GridMapPoint p1_rotated;
+     GridMapPoint p2_rotated; 
+     p1_rotated.i = diffP1.i * std::cos(theta) - diffP1.j * std::sin(theta); 
+     p1_rotated.j = diffP1.i * std::sin(theta) + diffP1.j * std::cos(theta);
 
-        p2_rotated.i = diffP2.i * std::cos(theta) - diffP2.j * std::sin(theta); 
-        p2_rotated.j = diffP2.i * std::sin(theta) + diffP2.j * std::cos(theta);
-        double gradInMap1 = ((double)(p1_rotated.i)) / ((double)(p1_rotated.j));
-        double gradInMap2 = ((double)(p2_rotated.i)) / ((double)(p2_rotated.j));
-        int r_tolerance = tolerance;
-        if (!isObstacleInReal1 && !isObstacleInReal2) {
-            r_tolerance = 0; 
-        }
-        for (int y = 0; y < std::min(p1_rotated.j, p2_rotated.j) - r_tolerance; y++) {
-            for (int x = gradInMap1 * (y ); x < gradInMap2 * (y); x++) {
-                GridMapPoint gp_temp = GridMapPoint(x, y, -theta) + pairOfRobot;
-                map.at<uchar>(gp_temp.i, gp_temp.j) = 255;
-                if(gp_debug.i == gp_temp.i && gp_debug.j == gp_temp.j) {
-                    cout<<"unjack pot"<<endl;
-                }     
-            }
-        }
-        it++;
-        it2++;
+     p2_rotated.i = diffP2.i * std::cos(theta) - diffP2.j * std::sin(theta); 
+     p2_rotated.j = diffP2.i * std::sin(theta) + diffP2.j * std::cos(theta);
+     double gradInMap1 = ((double)(p1_rotated.i)) / ((double)(p1_rotated.j));
+     double gradInMap2 = ((double)(p2_rotated.i)) / ((double)(p2_rotated.j));
+     int r_tolerance = tolerance;
+     if (!isObstacleInReal1 && !isObstacleInReal2) {
+        r_tolerance = 3; 
     }
-    cout<<"margin : "<<cnt<<" "<<obsCnt<<endl;
-    return result;
+    for (int y = 0; y < std::min(p1_rotated.j, p2_rotated.j) - r_tolerance; y++) {
+        for (int x = gradInMap1 * (y ); x < gradInMap2 * (y); x++) {
+            GridMapPoint gp_temp = GridMapPoint(x, y, -theta, false) + pairOfRobot;
+            GridMapPoint gp_temp2 = GridMapPoint(x, y, -theta, true) + pairOfRobot;
+            if(!result) {
+                result = (map.at<uchar>(gp_temp.i, gp_temp.j) != 255 );  
+            }
+            map.at<uchar>(gp_temp.i, gp_temp.j) = 255;
+            map.at<uchar>(gp_temp2.i, gp_temp2.j) = 255;
+        }
+    }
+    it++;
+    it2++;
+}
+cout<<"margin : "<<cnt<<" "<<obsCnt<<endl;
+return result;
 }
