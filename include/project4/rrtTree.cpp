@@ -48,7 +48,7 @@ rrtTree::~rrtTree(){
     flushVertex();
 }
 
-#ifdef DEBUG_VISUALIZE_TREE
+
     void rrtTree::visualizeTree(){
         int thickness = 1;
         int lineType = 8;
@@ -115,7 +115,7 @@ rrtTree::~rrtTree(){
         cv::waitKey(0);
 
     }
-#endif
+
 
 void rrtTree::addVertex(point x_new, point x_rand, int idx_near) {
     ptrTable[count] = new node;
